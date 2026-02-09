@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/prcopilot/__init__.py
+src/prcopilot/cli.py
+src/prcopilot.egg-info/PKG-INFO
+src/prcopilot.egg-info/SOURCES.txt
+src/prcopilot.egg-info/dependency_links.txt
+src/prcopilot.egg-info/entry_points.txt
+src/prcopilot.egg-info/requires.txt
+src/prcopilot.egg-info/top_level.txt
+src/prcopilot/domain/__init__.py
+src/prcopilot/domain/diff.py
+src/prcopilot/domain/schema.py
+tests/test_schema_diff.py
