@@ -9,6 +9,10 @@ src/prcopilot.egg-info/entry_points.txt
 src/prcopilot.egg-info/requires.txt
 src/prcopilot.egg-info/top_level.txt
 src/prcopilot/domain/__init__.py
+src/prcopilot/domain/contract.py
 src/prcopilot/domain/diff.py
 src/prcopilot/domain/schema.py
+src/prcopilot/services/__init__.py
+src/prcopilot/services/contract_runner.py
+tests/test_contract_runner.py
 tests/test_schema_diff.py

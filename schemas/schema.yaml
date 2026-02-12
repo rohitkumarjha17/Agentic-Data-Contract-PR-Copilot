@@ -1,0 +1,20 @@
+﻿version: 2
+tables:
+  - name: orders
+    columns:
+      - name: order_id
+        type: int
+        nullable: false
+        primary_key: true
+      - name: user_id
+        type: int
+        nullable: false
+      - name: total_amount
+        type: float
+        nullable: false
+      - name: created_at
+        type: timestamp
+        nullable: false
+      - name: currency
+        type: string
+        nullable: true

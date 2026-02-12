@@ -1,0 +1,4 @@
+﻿order_id,user_id,total_amount,created_at,currency
+1,101,19.99,2026-02-01T10:00:00Z,USD
+2,102,5.50,2026-02-01T10:05:00Z,USD
+3,101,12.00,2026-02-01T10:10:00Z,USD

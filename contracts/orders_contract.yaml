@@ -1,0 +1,17 @@
+﻿table: orders
+rules:
+  - column: order_id
+    checks:
+      - type: not_null
+      - type: unique
+  - column: user_id
+    checks:
+      - type: not_null
+  - column: total_amount
+    checks:
+      - type: not_null
+      - type: min
+        value: 0
+  - column: created_at
+    checks:
+      - type: not_null
