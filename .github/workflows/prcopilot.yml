@@ -28,6 +28,8 @@ jobs:
       - name: Unit tests
         run: |
           python -m pytest -q
+      - name: Ensure artifacts dir
+        run: mkdir -p artifacts
 
       - name: Schema diff against base branch
         run: |
