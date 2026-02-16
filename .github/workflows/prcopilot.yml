@@ -1,14 +1,16 @@
-﻿name: PR Copilot Gate
+﻿name: prcopilot
 
 on:
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch: {}
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  validate:
+  schema-diff:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,33 +22,88 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install
+      - name: Install prcopilot
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -U pip
+          python -m pip install -e .
 
-      - name: Unit tests
+      - name: Find schema path
+        id: schema
         run: |
-          python -m pytest -q
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
 
-      - name: Schema diff against base branch
+          # Optional override from repo variable PRCOPILOT_SCHEMA_PATH
+          if [ -n "${PRCOPILOT_SCHEMA_PATH:-}" ]; then
+            SCHEMA_PATH="$PRCOPILOT_SCHEMA_PATH"
+          else
+            # Heuristic: pick first schema-like file from HEAD
+            SCHEMA_PATH="$(git ls-tree -r --name-only "$HEAD_SHA" \
+              | grep -Ei '(^|/)(schema|schemas|contract|contracts).*\.(json|ya?ml)$' \
+              | head -n 1 || true)"
+          fi
+
+          if [ -z "${SCHEMA_PATH:-}" ]; then
+            echo "No schema-like file found. Set repo variable PRCOPILOT_SCHEMA_PATH to your schema file path."
+            exit 1
+          fi
+
+          # Ensure file exists in base too
+          git cat-file -e "$BASE_SHA:$SCHEMA_PATH" || (echo "Schema path not found in base commit: $SCHEMA_PATH" && exit 1)
+
+          echo "schema_path=$SCHEMA_PATH" >> "$GITHUB_OUTPUT"
+          echo "Using schema path: $SCHEMA_PATH"
+
+      - name: Generate diff report
         run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          git show origin/${{ github.base_ref }}:schemas/schema.yaml > schemas/_base.yaml
-          cp schemas/schema.yaml schemas/_head.yaml
-          prcopilot diff --base schemas/_base.yaml --head schemas/_head.yaml --out artifacts/diff.json
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
+          SCHEMA_PATH="${{ steps.schema.outputs.schema_path }}"
 
-      - name: Contract checks
-        run: |
-          prcopilot contract --contract contracts/orders_contract.yaml --data examples/data/orders.csv --out artifacts/contract_report.json
+          mkdir -p artifacts
+          git show "$BASE_SHA:$SCHEMA_PATH" > artifacts/base_schema
+          git show "$HEAD_SHA:$SCHEMA_PATH" > artifacts/head_schema
 
-      - name: Upload artifacts
-        if: always()
+          # capture report to Markdown
+          echo "# PRCopilot schema diff" > artifacts/prcopilot_report.md
+          echo "" >> artifacts/prcopilot_report.md
+          echo "**Schema file:** \`$SCHEMA_PATH\`" >> artifacts/prcopilot_report.md
+          echo "" >> artifacts/prcopilot_report.md
+          echo "## Diff" >> artifacts/prcopilot_report.md
+          echo '```' >> artifacts/prcopilot_report.md
+          prcopilot diff artifacts/base_schema artifacts/head_schema >> artifacts/prcopilot_report.md
+          echo '```' >> artifacts/prcopilot_report.md
+
+      - name: Upload report artifact
         uses: actions/upload-artifact@v4
         with:
-          name: prcopilot-artifacts
-          path: |
-            artifacts/diff.json
-            artifacts/contract_report.json
-            schemas/_base.yaml
-            schemas/_head.yaml
+          name: prcopilot-report
+          path: artifacts/prcopilot_report.md
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('artifacts/prcopilot_report.md', 'utf8');
+
+            const markerStart = '<!-- PRCOPILOT_REPORT_START -->';
+            const markerEnd   = '<!-- PRCOPILOT_REPORT_END -->';
+            const finalBody = `${markerStart}\n${body}\n${markerEnd}`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            // Try update existing comment
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const existing = comments.data.find(c => c.body && c.body.includes(markerStart) && c.body.includes(markerEnd));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: finalBody });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: finalBody });
+            }
+    env:
+      PRCOPILOT_SCHEMA_PATH: ${{ vars.PRCOPILOT_SCHEMA_PATH }}
