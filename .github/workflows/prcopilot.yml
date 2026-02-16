@@ -5,6 +5,10 @@ on:
     branches: [ "main" ]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -28,19 +32,58 @@ jobs:
       - name: Unit tests
         run: |
           python -m pytest -q
+
       - name: Ensure artifacts dir
-        run: mkdir -p artifacts
+        run: mkdir -p artifacts schemas
 
       - name: Schema diff against base branch
+        id: schema_diff
+        shell: bash
+        continue-on-error: true
         run: |
+          set +e
           git fetch origin ${{ github.base_ref }} --depth=1
           git show origin/${{ github.base_ref }}:schemas/schema.yaml > schemas/_base.yaml
           cp schemas/schema.yaml schemas/_head.yaml
           prcopilot diff --base schemas/_base.yaml --head schemas/_head.yaml --out artifacts/diff.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Contract checks
+        id: contract
+        shell: bash
+        continue-on-error: true
         run: |
+          set +e
           prcopilot contract --contract contracts/orders_contract.yaml --data examples/data/orders.csv --out artifacts/contract_report.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Build PR comment markdown
+        run: |
+          prcopilot report --diff artifacts/diff.json --contract-report artifacts/contract_report.json --out artifacts/pr_comment.md
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('artifacts/pr_comment.md', 'utf8');
+            const marker = '<!-- prcopilot -->';
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100
+            });
+
+            const existing = comments.find(c => (c.body || '').includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
       - name: Upload artifacts
         if: always()
@@ -50,5 +93,17 @@ jobs:
           path: |
             artifacts/diff.json
             artifacts/contract_report.json
+            artifacts/pr_comment.md
             schemas/_base.yaml
             schemas/_head.yaml
+
+      - name: Enforce gate
+        shell: bash
+        run: |
+          d=${{ steps.schema_diff.outputs.exit_code }}
+          c=${{ steps.contract.outputs.exit_code }}
+          echo "schema_diff exit: $d"
+          echo "contract exit: $c"
+          if [[ "$d" != "0" || "$c" != "0" ]]; then
+            exit 1
+          fi
