@@ -6,3 +6,25 @@ __pycache__/
 artifacts/
 *.pyc
 
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+artifacts/
+# Python build and cache noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Packaging build artifacts
+*.egg-info/
+dist/
+build/
+
+# Local environmnet
+.venv/
