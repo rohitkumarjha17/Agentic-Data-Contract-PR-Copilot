@@ -28,3 +28,22 @@ build/
 
 # Local environmnet
 .venv/
+
+# venv
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+
+# packaging
+*.egg-info/
+dist/
+build/
+
+# test
+.pytest_cache/
+
+# artifacts
+artifacts/
