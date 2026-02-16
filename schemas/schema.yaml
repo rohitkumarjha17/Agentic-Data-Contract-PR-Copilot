@@ -12,9 +12,6 @@ tables:
       - name: total_amount
         type: float
         nullable: false
-      - name: created_at
-        type: timestamp
-        nullable: false
       - name: currency
         type: string
         nullable: true
