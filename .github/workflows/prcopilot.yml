@@ -53,6 +53,13 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           python scripts/pr_comment.py
+      
+      - name: Upload PR comment markdown
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-comment
+          path: artifacts/pr_comment.md
 
       - name: Comment on PR with PR Copilot summary
         if: github.event_name == 'pull_request'
